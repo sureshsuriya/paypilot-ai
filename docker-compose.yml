@@ -1,0 +1,43 @@
+# PayPilot AI — Docker Compose (Optional Local Development)
+# MySQL 8.0.45 service for judges who don't have MySQL installed locally.
+#
+# ⚠️  IMPORTANT: This does NOT replace or reset an existing local MySQL database.
+#     Use this ONLY if you don't already have MySQL 8 running locally.
+#
+# Usage:
+#   docker compose up -d mysql
+#   # Wait ~30 seconds for MySQL to initialize
+#   # Then start backend: cd backend && mvn spring-boot:run
+#
+# The database 'paypilot_ai' and user 'paypilot_user' are created automatically.
+
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0.45
+    container_name: paypilot-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: paypilot_ai
+      MYSQL_USER: paypilot_user
+      MYSQL_PASSWORD: paypilotpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - paypilot_mysql_data:/var/lib/mysql
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "paypilot_user", "-ppaypilotpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  paypilot_mysql_data:
+    driver: local
+
