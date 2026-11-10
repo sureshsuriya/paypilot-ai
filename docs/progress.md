@@ -2,7 +2,7 @@
 ## PayPal AI Hackathon 2026
 
 > **Last updated**: 2026-11-10  
-> **Current phase**: Phase 2 — Database Layer (Spring Boot + JPA) **COMPLETE & LIVE-VERIFIED** (Awaiting approval to start Phase 3)
+> **Current phase**: Phase 3 — Invoice CRUD APIs and Validation **COMPLETE & VERIFIED** (Awaiting approval to start Phase 4)
 
 ---
 
@@ -55,22 +55,27 @@
 - [x] `backend/.env` configured locally and verified Git-ignored (`.gitignore:11:*.env`)
 - [x] Live MySQL `8.0.45` (`paypilot_ai`) verified empty before migration; Flyway `V1__init_schema.sql` executed cleanly (`00:00.148s`) and `Hibernate ddl-auto=validate` passed on `Started PayPilotApplication in 5.056 seconds`
 - [x] All 6 tables verified in `paypilot_ai`: `users`, `invoices`, `payments`, `audit_logs`, `ai_extraction_logs`, `flyway_schema_history` (`version=1, success=1`)
+- [x] Phase 2 committed at `31fe9a5` (`feat(backend): add core entities repositories and audit logging`)
+
+### Phase 3 — Invoice CRUD APIs and Validation
+- [x] Minimal stateless JWT authentication & Spring Security (`SecurityConfig`, `JwtUtil`, `JwtAuthFilter`, `AuthenticatedUser`, `CustomUserDetailsService`, `AuthService`, `AuthController`)
+- [x] DTO request/response layer (`CreateInvoiceRequest`, `UpdateInvoiceRequest`, `InvoiceResponse`, `RegisterRequest`, `LoginRequest`, `AuthResponse`, `UserSummaryDto`, `ApiErrorResponse`) — JPA entities never exposed
+- [x] Validation & `BigDecimal` monetary handling (`clientName`, `clientEmail`, `description`, `amount >= 0.01`, 3-letter `currency`, `@FutureOrPresent` `dueDate`)
+- [x] `InvoiceService` & `InvoiceController` (`POST /api/invoices`, `GET /api/invoices`, `GET /api/invoices/{id}`, `PUT /api/invoices/{id}`, `DELETE /api/invoices/{id}`) with JWT-derived user ownership, collision-safe `INV-YYYYMMDD-XXXXXX` generator, draft-only edit/delete enforcement, and immutable audit logging
+- [x] `HealthController` (`GET /api/health`) and centralized `GlobalExceptionHandler`
+- [x] Automated tests added: `AuthAndInvoiceIntegrationTest` (6 tests) + `InvoiceServiceTest` (2 tests)
+- [x] `mvn clean test` — `BUILD SUCCESS` (21/21 tests passing across 7 test classes, 0 failures, 0 skipped)
+- [x] Live verification against `paypilot_ai`: `GET /api/health` -> `200 OK`, unauthenticated & invalid-JWT `GET /api/invoices` -> `401 Unauthorized`
 
 ---
 
 ## 🔄 In Progress
 
-*(Nothing — Phase 2 verified; awaiting user approval to begin Phase 3)*
+*(Nothing — Phase 3 verified; awaiting user approval to begin Phase 4)*
 
 ---
 
-## ⏳ Pending (Approved 8-Phase Roadmap: Phases 3–8)
-
-### Phase 3 — Invoice CRUD APIs and Validation
-- [ ] Minimal, secure MVP authentication (`SecurityConfig`, `JwtUtil`, `JwtAuthFilter`, `AuthController`)
-- [ ] Invoice DTOs & strict validation (`BigDecimal`, email, currency, due date, missing-fields checks)
-- [ ] `InvoiceService` & `InvoiceController` (`POST`, `GET`, `PUT`, `DELETE` draft invoices, audit logging)
-- [ ] Global API exception handler + controller/service tests
+## ⏳ Pending (Approved 8-Phase Roadmap: Phases 4–8)
 
 ### Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction
 - [ ] Implement `/api/ai/extract` in Node.js `ai-service` using OpenAI GPT-4o structured outputs + Zod validation + Demo Mode fallback
@@ -108,10 +113,10 @@
 
 ---
 
-## ⏭️ Next Tasks (Awaiting Approval for Phase 3)
+## ⏭️ Next Tasks (Awaiting Approval for Phase 4)
 
-1. Commit verified Phase 2 changes (excluding `.env` / secrets)
-2. Start **Phase 3 — Invoice CRUD APIs and Validation** upon user approval
+1. Optionally commit Phase 3 changes (verifying no `.env` or secrets staged)
+2. Start **Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction** upon user approval
 
 ---
 
