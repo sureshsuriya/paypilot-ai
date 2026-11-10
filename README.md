@@ -400,9 +400,12 @@ See [`docs/api-reference.md`](docs/api-reference.md) for the full API documentat
 | Spring Data JPA | Apache 2.0 |
 | Flyway | Apache 2.0 |
 | MySQL Connector/J | GPL 2.0 with FOSS exception |
-| PayPal REST SDK (Java) | Apache 2.0 | Note: direct REST via Spring's RestClient — no third-party PayPal SDK dependency |
+| Direct PayPal REST (`RestClient`) | Apache 2.0 (Spring Web) — no third-party PayPal SDK dependency |
 | JJWT (JWT library) | Apache 2.0 |
 | Jackson (JSON) | Apache 2.0 |
+| Lombok | MIT |
+| spring-dotenv | Apache 2.0 |
+| H2 Database (test scope only) | MPL 2.0 / EPL 1.0 |
 
 ### AI Service (Node.js)
 | Dependency | License |

@@ -2,7 +2,7 @@
 ## PayPal AI Hackathon 2026
 
 > **Last updated**: 2026-11-10  
-> **Current phase**: Phase 1 — Project Scaffolding and Compliance Documentation
+> **Current phase**: Phase 2 — Database Layer (Spring Boot + JPA) **COMPLETE & LIVE-VERIFIED** (Awaiting approval to start Phase 3)
 
 ---
 
@@ -44,99 +44,61 @@
 - [x] `docker-compose.yml` — MySQL 8 dev environment
 - [x] Phase 1 verification: TypeScript compiles, frontend builds, Maven validates
 
+### Phase 2 — Database Layer (Spring Boot + JPA)
+- [x] Enums created (`UserRole.java`, `InvoiceStatus.java`, `PaymentStatus.java`, `AuditActor.java`, `ExtractionMethod.java`)
+- [x] JPA entities created with `BigDecimal` amounts, Bean Validation, indexes, foreign keys, and MySQL column types (`User.java`, `Invoice.java`, `Payment.java`, `AuditLog.java`, `AiExtractionLog.java`)
+- [x] Spring Data JPA repositories created (`UserRepository`, `InvoiceRepository`, `PaymentRepository`, `AuditLogRepository`, `AiExtractionLogRepository`)
+- [x] `AuditLogService.java` implemented with append-only financial event logging and sensitive-key redaction
+- [x] Entity persistence and repository tests created (`UserRepositoryTest`, `InvoiceRepositoryTest`, `PaymentRepositoryTest`, `AiExtractionLogRepositoryTest`, `AuditLogServiceTest`)
+- [x] `mvn clean compile` — `BUILD SUCCESS` (17 main Java files compiled with Java 22)
+- [x] `mvn test` — `BUILD SUCCESS` (13/13 tests passed against isolated H2 in `MODE=MySQL` running `V1__init_schema.sql` + `ddl-auto=validate`)
+- [x] `backend/.env` configured locally and verified Git-ignored (`.gitignore:11:*.env`)
+- [x] Live MySQL `8.0.45` (`paypilot_ai`) verified empty before migration; Flyway `V1__init_schema.sql` executed cleanly (`00:00.148s`) and `Hibernate ddl-auto=validate` passed on `Started PayPilotApplication in 5.056 seconds`
+- [x] All 6 tables verified in `paypilot_ai`: `users`, `invoices`, `payments`, `audit_logs`, `ai_extraction_logs`, `flyway_schema_history` (`version=1, success=1`)
+
 ---
 
 ## 🔄 In Progress
 
-*(Nothing — Phase 1 complete, awaiting Phase 2 approval)*
+*(Nothing — Phase 2 verified; awaiting user approval to begin Phase 3)*
 
 ---
 
-## ⏳ Pending (by phase)
+## ⏳ Pending (Approved 8-Phase Roadmap: Phases 3–8)
 
-### Phase 2 — Database Layer (Spring Boot + JPA)
-- [ ] `User.java` entity + `UserRepository.java`
-- [ ] `Invoice.java` entity + `InvoiceRepository.java`
-- [ ] `Payment.java` entity + `PaymentRepository.java`
-- [ ] `AuditLog.java` entity + `AuditLogRepository.java`
-- [ ] `AiExtractionLog.java` entity + `AiExtractionLogRepository.java`
-- [ ] `AuditLogService.java` — append-only audit logging
-- [ ] DB connection test: `mvn spring-boot:run` connects to `paypilot_ai`, Flyway migrates
-- [ ] Verify all 5 tables created correctly in MySQL
+### Phase 3 — Invoice CRUD APIs and Validation
+- [ ] Minimal, secure MVP authentication (`SecurityConfig`, `JwtUtil`, `JwtAuthFilter`, `AuthController`)
+- [ ] Invoice DTOs & strict validation (`BigDecimal`, email, currency, due date, missing-fields checks)
+- [ ] `InvoiceService` & `InvoiceController` (`POST`, `GET`, `PUT`, `DELETE` draft invoices, audit logging)
+- [ ] Global API exception handler + controller/service tests
 
-### Phase 3 — Spring Boot REST API (Invoices CRUD + Minimal Auth)
-- [ ] `AuthController.java` — `POST /api/auth/register`, `POST /api/auth/login`
-- [ ] `JwtUtil.java` — token generation and validation
-- [ ] `JwtAuthFilter.java` — per-request JWT validation filter
-- [ ] `SecurityConfig.java` — minimal Spring Security config (stateless JWT)
-- [ ] `InvoiceController.java` — CRUD endpoints
-- [ ] `InvoiceService.java` — business logic, invoice number generation
-- [ ] `InvoiceDto.java`, `CreateInvoiceRequest.java`
-- [ ] API test: create, list, get, update invoice via curl or Postman
-- [ ] `AiProxyController.java` — `/api/ai/*` proxy routes (Spring Boot → AI service)
+### Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction
+- [ ] Implement `/api/ai/extract` in Node.js `ai-service` using OpenAI GPT-4o structured outputs + Zod validation + Demo Mode fallback
+- [ ] Extract customer, service, amount, currency, due date, and `missingFields` from natural-language prompts
+- [ ] Implement Spring Boot `AiProxyController` (`/api/ai/extract-invoice`) proxying browser requests to internal AI service and logging to `ai_extraction_logs`
 
-### Phase 4 — PayPal Sandbox Integration
-- [ ] `PayPalClient.java` — OAuth token management + direct REST calls
-- [ ] `PayPalInvoicingService.java` — create/send/get PayPal invoice
-- [ ] `PaymentController.java` — create order, capture, webhook
-- [ ] `PaymentService.java` — capture verification logic (PAID only on COMPLETED)
-- [ ] `WebhookController.java` — `payment.capture.completed` handler
-- [ ] Integration test: Sandbox invoice created, payment captured, invoice marked PAID
-- [ ] Verify: no PAID status without confirmed capture evidence
+### Phase 5 — Human Approval Workflow & PayPal Sandbox Orders API
+- [ ] Safe `V2__` Flyway migration adding explicit approval tracking (`approved_by_user`, `approved_at`, or `APPROVED` state)
+- [ ] Strict backend approval gate: block PayPal payment creation until explicitly approved; invalidate approval on any material invoice change
+- [ ] Verify current official PayPal Orders v2 REST API docs
+- [ ] Implement `PayPalClient` (OAuth2 + `POST /v2/checkout/orders`) in Spring Boot and return Sandbox approval link
 
-### Phase 5 — AI Invoice Extraction Agent (Node.js)
-- [ ] `extractionRouter.ts` — full implementation
-- [ ] `invoiceExtractor.ts` — pdf-parse text extraction → GPT-4o structured output
-- [ ] `invoiceSchema.ts` — Zod schema for extracted invoice
-- [ ] `InvoiceUploadController.java` — receive PDF, proxy to AI service, return draft
-- [ ] Demo: upload sample invoice PDF, verify extraction, user confirms
+### Phase 6 — Payment Capture Verification, Audit History & AI Explanations
+- [ ] Implement `POST /api/payments/capture/{orderId}` verifying PayPal capture `status = COMPLETED` before setting `PaymentStatus.CAPTURED` and `InvoiceStatus.PAID`
+- [ ] Store only minimal payment verification evidence in `payments` (no secrets or sensitive card/payer data)
+- [ ] Audit history endpoints (`GET /api/audit-logs`)
+- [ ] Implement `/api/ai/explain` in `ai-service` + Java backend proxy reading verified DB records only
 
-### Phase 6 — AI Payment Operations Agent + Human Gate
-- [ ] `paymentOpsRouter.ts` — full implementation
-- [ ] `paymentOps.ts` — GPT-4o tool calling to propose PayPal action
-- [ ] Human approval endpoint: `POST /api/payments/approve-and-execute`
-- [ ] Demo: AI proposes payment, user approves, PayPal executes
+### Phase 7 — React Frontend Integration & Dashboard
+- [ ] Clean Tailwind UI: minimal login/register, natural-language prompt bar, invoice draft review + missing-field validation editor
+- [ ] Explicit **Approve Invoice** gate UI + **Pay with PayPal [SANDBOX]** flow + capture return handling
+- [ ] Verified `PAID [SANDBOX]` status, dashboard summary metrics, audit history feed, and AI explanation panel
 
-### Phase 7 — React Frontend (Core UI)
-- [ ] Layout: sidebar, header, navigation
-- [ ] Auth pages: login, register
-- [ ] Invoice list page
-- [ ] Invoice detail + create form
-- [ ] Invoice upload + AI extraction preview (with confirm step)
-- [ ] Payment approval UI (shows AI proposal, Approve/Reject buttons)
-- [ ] [SANDBOX] badge on all payment transactions
-- [ ] API client (axios + types)
-
-### Phase 8 — Reconciliation + Explanation Agents
-- [ ] `reconciliationRouter.ts` — full implementation
-- [ ] `explainerRouter.ts` — full implementation
-- [ ] React: AI reconciliation report view
-- [ ] React: financial explanation chat panel
-- [ ] All AI outputs labeled as AI-generated
-
-### Phase 9 — Dashboard
-- [ ] Dashboard metrics: total invoiced, collected, outstanding, overdue
-- [ ] Invoice status chart
-- [ ] Recent activity feed from audit_logs
-
-### Phase 10 — Security Hardening + Webhook
-- [ ] PayPal webhook signature verification
-- [ ] Rate limiting on AI endpoints
-- [ ] Input sanitization review
-- [ ] CORS production config
-
-### Phase 11 — Integration Testing + Compliance Audit
-- [ ] End-to-end test: full payment flow
-- [ ] Update hackathon-compliance.md with PASS/FAIL evidence
-- [ ] Security review: no secrets exposed
-- [ ] Performance review: AI latency acceptable
-
-### Phase 12 — Demo Preparation + Final Docs
-- [ ] Sample invoice PDFs for judges
-- [ ] Sandbox test account instructions
-- [ ] Final README pass
-- [ ] YouTube demo video (under 3 minutes)
-- [ ] Hosted demo or final build instructions
+### Phase 8 — Testing, Security Review, Deployment & Hackathon Demo Prep
+- [ ] Full end-to-end integration test (live MySQL + PayPal Sandbox + GPT-4o)
+- [ ] Security & license review (zero secrets exposed, all dependencies documented)
+- [ ] Update `docs/hackathon-compliance.md` with verified PASS/FAIL evidence
+- [ ] Finalize `README.md`, `docs/demo-instructions.md`, and hackathon demo preparation
 
 ---
 
@@ -146,14 +108,10 @@
 
 ---
 
-## ⏭️ Next Tasks (immediately actionable after Phase 1 approval)
+## ⏭️ Next Tasks (Awaiting Approval for Phase 3)
 
-**Phase 2 — Database Layer:**
-1. Create all 5 JPA entity classes
-2. Create all 5 JPA repositories  
-3. Create `AuditLogService.java`
-4. Run `mvn spring-boot:run` and verify Flyway migrates successfully
-5. Confirm all 5 tables exist in MySQL `paypilot_ai`
+1. Commit verified Phase 2 changes (excluding `.env` / secrets)
+2. Start **Phase 3 — Invoice CRUD APIs and Validation** upon user approval
 
 ---
 

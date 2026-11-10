@@ -133,6 +133,12 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Isolated in-memory H2 (MySQL mode) for unit/repository tests without mutating paypilot_ai -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
 
     </dependencies>
 
