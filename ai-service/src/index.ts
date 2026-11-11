@@ -15,41 +15,28 @@
  * Node.js 22.12.0 | TypeScript 5.x | Express 4.x | OpenAI SDK 4.x
  */
 
-import 'dotenv/config';
-import express from 'express';
-import { validateServiceSecret } from './middleware/auth.js';
-import { errorHandler } from './middleware/errorHandler.js';
-import { healthRouter } from './routes/health.js';
-import { extractionRouter } from './routes/extraction.js';
-import { reconciliationRouter } from './routes/reconciliation.js';
-import { paymentOpsRouter } from './routes/paymentOps.js';
-import { explainerRouter } from './routes/explainer.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+import { createApp } from './app.js';
 
-const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const app = createApp();
 const PORT = parseInt(process.env['AI_SERVICE_PORT'] ?? '3001', 10);
 
-// ---- Middleware ----
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+const demoMode = process.env['DEMO_MODE'] === 'true';
+const hasApiKey =
+  Boolean(process.env['OPENAI_API_KEY']) &&
+  process.env['OPENAI_API_KEY'] !== 'your_openai_api_key_here';
 
-// ---- Health check (unauthenticated — for Spring Boot readiness checks) ----
-app.use('/health', healthRouter);
-
-// ---- All other routes require the shared backend secret ----
-app.use(validateServiceSecret);
-
-// ---- AI Agent Routes ----
-// All routes are prefixed /api/ai/* when called from Spring Boot
-app.use('/api/ai/extract', extractionRouter);       // Invoice PDF extraction agent
-app.use('/api/ai/reconcile', reconciliationRouter); // Payment reconciliation agent
-app.use('/api/ai/payment-ops', paymentOpsRouter);   // Payment operations agent (propose only)
-app.use('/api/ai/explain', explainerRouter);         // Financial explanation agent
-
-// ---- Error handler (must be last) ----
-app.use(errorHandler);
+if (!demoMode && !hasApiKey) {
+  console.warn('⚠️  DEMO_MODE is false and OPENAI_API_KEY is missing or placeholder.');
+}
 
 app.listen(PORT, () => {
-  const demoMode = process.env['DEMO_MODE'] === 'true';
   console.log(`PayPilot AI Service running on port ${PORT}`);
   console.log(`Mode: ${demoMode ? '⚠️  DEMO (mock AI responses)' : '✅ LIVE (OpenAI GPT-4o)'}`);
   console.log(`Model: ${process.env['OPENAI_MODEL'] ?? 'gpt-4o'}`);

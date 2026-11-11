@@ -7,10 +7,12 @@ import com.paypilot.dto.invoice.UpdateInvoiceRequest;
 import com.paypilot.exception.ForbiddenOperationException;
 import com.paypilot.exception.InvalidInvoiceStateException;
 import com.paypilot.exception.ResourceNotFoundException;
+import com.paypilot.model.AiExtractionLog;
 import com.paypilot.model.AuditActor;
 import com.paypilot.model.Invoice;
 import com.paypilot.model.InvoiceStatus;
 import com.paypilot.model.User;
+import com.paypilot.repository.AiExtractionLogRepository;
 import com.paypilot.repository.InvoiceRepository;
 import com.paypilot.repository.PaymentRepository;
 import com.paypilot.repository.UserRepository;
@@ -44,6 +46,7 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
+    private final AiExtractionLogRepository extractionLogRepository;
     private final AuditLogService auditLogService;
 
     @Transactional
@@ -55,6 +58,15 @@ public class InvoiceService {
         User owner = userRepository.findById(authenticatedUserId)
             .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found."));
 
+        AiExtractionLog extractionLog = null;
+        if (request.extractionLogId() != null) {
+            extractionLog = extractionLogRepository.findById(request.extractionLogId())
+                .orElseThrow(() -> new ResourceNotFoundException("AI extraction log not found."));
+            if (extractionLog.getInvoice() != null) {
+                throw new InvalidInvoiceStateException("This AI extraction log is already linked to an invoice.");
+            }
+        }
+
         String invoiceNumber = generateUniqueInvoiceNumber(owner.getId());
 
         Invoice invoice = Invoice.builder()
@@ -62,7 +74,8 @@ public class InvoiceService {
             .invoiceNumber(invoiceNumber)
             .status(InvoiceStatus.DRAFT)
             .issuedAt(LocalDate.now())
-            .aiExtracted(Boolean.FALSE)
+            .aiExtracted(extractionLog != null)
+            .aiConfidence(extractionLog != null ? extractionLog.getConfidenceScore() : null)
             .build();
 
         applyValidatedFields(
@@ -77,6 +90,12 @@ public class InvoiceService {
 
         Invoice saved = invoiceRepository.save(invoice);
 
+        if (extractionLog != null) {
+            extractionLog.setInvoice(saved);
+            extractionLog.setValidatedByUser(Boolean.TRUE);
+            extractionLogRepository.save(extractionLog);
+        }
+
         auditLogService.logEvent(
             owner.getId(),
             "INVOICE",
@@ -88,7 +107,8 @@ public class InvoiceService {
                 "amount", saved.getAmount().toPlainString(),
                 "currency", saved.getCurrency(),
                 "status", saved.getStatus().name(),
-                "dueDate", saved.getDueDate().toString()
+                "dueDate", saved.getDueDate().toString(),
+                "aiAssisted", extractionLog != null
             ),
             ipAddress
         );
@@ -165,6 +185,13 @@ public class InvoiceService {
 
         if (!paymentRepository.findByInvoiceIdOrderByCreatedAtDesc(invoice.getId()).isEmpty()) {
             throw new InvalidInvoiceStateException("Invoices with associated payment records cannot be deleted.");
+        }
+
+        // Preserve AI transparency log while removing FK link before deleting draft
+        List<AiExtractionLog> linkedLogs = extractionLogRepository.findByInvoiceIdOrderByCreatedAtDesc(invoice.getId());
+        if (!linkedLogs.isEmpty()) {
+            linkedLogs.forEach(log -> log.setInvoice(null));
+            extractionLogRepository.saveAll(linkedLogs);
         }
 
         String invoiceNumber = invoice.getInvoiceNumber();

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -41,7 +42,22 @@ public record CreateInvoiceRequest(
 
     @NotNull(message = "Due date is required")
     @FutureOrPresent(message = "Due date must be today or in the future")
-    LocalDate dueDate
+    LocalDate dueDate,
+
+    @Positive(message = "Extraction log ID must be positive")
+    Long extractionLogId
 ) {
+    /**
+     * Backward-compatible constructor for callers creating manual invoices without AI extraction.
+     */
+    public CreateInvoiceRequest(
+            String clientName,
+            String clientEmail,
+            String description,
+            BigDecimal amount,
+            String currency,
+            LocalDate dueDate) {
+        this(clientName, clientEmail, description, amount, currency, dueDate, null);
+    }
 }
 

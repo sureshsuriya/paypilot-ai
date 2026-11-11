@@ -78,6 +78,22 @@ public class GlobalExceptionHandler {
             .body(ApiErrorResponse.of(409, "Conflict", ex.getMessage(), request.getRequestURI()));
     }
 
+    @ExceptionHandler(AiServiceUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleAiUnavailable(
+            AiServiceUnavailableException ex,
+            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(ApiErrorResponse.of(503, "Service Unavailable", ex.getMessage(), request.getRequestURI()));
+    }
+
+    @ExceptionHandler(AiUpstreamException.class)
+    public ResponseEntity<ApiErrorResponse> handleAiUpstream(
+            AiUpstreamException ex,
+            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .body(ApiErrorResponse.of(502, "Bad Gateway", ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleDataIntegrity(
             DataIntegrityViolationException ex,

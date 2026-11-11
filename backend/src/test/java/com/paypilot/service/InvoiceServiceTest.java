@@ -7,6 +7,7 @@ import com.paypilot.model.Invoice;
 import com.paypilot.model.InvoiceStatus;
 import com.paypilot.model.User;
 import com.paypilot.model.UserRole;
+import com.paypilot.repository.AiExtractionLogRepository;
 import com.paypilot.repository.InvoiceRepository;
 import com.paypilot.repository.PaymentRepository;
 import com.paypilot.repository.UserRepository;
@@ -37,6 +38,8 @@ class InvoiceServiceTest {
     private UserRepository userRepository;
     @Mock
     private PaymentRepository paymentRepository;
+    @Mock
+    private AiExtractionLogRepository extractionLogRepository;
     @Mock
     private AuditLogService auditLogService;
 

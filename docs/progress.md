@@ -1,8 +1,8 @@
 # PayPilot AI — Development Progress
 ## PayPal AI Hackathon 2026
 
-> **Last updated**: 2026-11-10  
-> **Current phase**: Phase 3 — Invoice CRUD APIs and Validation **COMPLETE & VERIFIED** (Awaiting approval to start Phase 4)
+> **Last updated**: 2026-11-11  
+> **Current phase**: Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction **COMPLETE & TESTED (Mocked OpenAI — Zero Live API Spend)** (Awaiting review before commit / Phase 5)
 
 ---
 
@@ -66,21 +66,28 @@
 - [x] Automated tests added: `AuthAndInvoiceIntegrationTest` (6 tests) + `InvoiceServiceTest` (2 tests)
 - [x] `mvn clean test` — `BUILD SUCCESS` (21/21 tests passing across 7 test classes, 0 failures, 0 skipped)
 - [x] Live verification against `paypilot_ai`: `GET /api/health` -> `200 OK`, unauthenticated & invalid-JWT `GET /api/invoices` -> `401 Unauthorized`
+- [x] Phase 3 committed at `c355da2` (`feat(backend): implement secure invoice CRUD APIs`)
+
+### Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction
+- [x] Node.js `ai-service` Zod schemas & validation (`extractionSchema.ts`: input validation, strict `OpenAiInvoiceSchema` for `zodResponseFormat`, `validateAndEvaluateDraft`)
+- [x] `invoiceExtractor.ts` implementing GPT-4o structured output extraction with strict no-fabrication prompt rules, explicit `502`/`503` errors (no silent mock fallback), and injectable OpenAI client for zero-cost testing
+- [x] `mockExtractor.ts` deterministic parser activated **only** when `DEMO_MODE=true`
+- [x] `validateServiceSecret` upgraded with `crypto.timingSafeEqual`, plus explicit `.env` path resolution in `index.ts` and clean `createApp()` factory in `app.ts`
+- [x] Spring Boot internal AI proxy (`AiServiceClient`, `AiInvoiceService`, `AiController` `POST /api/ai/extract-invoice`) with authoritative Java `BigDecimal`/email/currency/`LocalDate` validation
+- [x] Draft preview only — extraction records `AiExtractionLog` (`validatedByUser = false`) and `AuditLog` (`AI_INVOICE_EXTRACTED`) without creating an `Invoice` automatically
+- [x] Optional `extractionLogId` confirmation link in `CreateInvoiceRequest` + `InvoiceService` (backward-compatible; marks `aiExtracted = true` and `validatedByUser = true` upon explicit user save; safely unlinks log if draft is deleted)
+- [x] `ai-service` `npm run typecheck`, `npm test` (**8/8 passed**), `npm run build` (`tsc`) — all passed with mocked OpenAI / `DEMO_MODE=true`
+- [x] `backend` `mvn clean test` — `BUILD SUCCESS` (**25/25 passed** across 8 test classes with mocked `AiServiceClient`, zero live OpenAI calls)
 
 ---
 
 ## 🔄 In Progress
 
-*(Nothing — Phase 3 verified; awaiting user approval to begin Phase 4)*
+*(Nothing — Phase 4 implemented & unit/integration tested; awaiting user review before Git checkpoint / live verification / Phase 5)*
 
 ---
 
-## ⏳ Pending (Approved 8-Phase Roadmap: Phases 4–8)
-
-### Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction
-- [ ] Implement `/api/ai/extract` in Node.js `ai-service` using OpenAI GPT-4o structured outputs + Zod validation + Demo Mode fallback
-- [ ] Extract customer, service, amount, currency, due date, and `missingFields` from natural-language prompts
-- [ ] Implement Spring Boot `AiProxyController` (`/api/ai/extract-invoice`) proxying browser requests to internal AI service and logging to `ai_extraction_logs`
+## ⏳ Pending (Approved 8-Phase Roadmap: Phases 5–8)
 
 ### Phase 5 — Human Approval Workflow & PayPal Sandbox Orders API
 - [ ] Safe `V2__` Flyway migration adding explicit approval tracking (`approved_by_user`, `approved_at`, or `APPROVED` state)
@@ -113,10 +120,11 @@
 
 ---
 
-## ⏭️ Next Tasks (Awaiting Approval for Phase 4)
+## ⏭️ Next Tasks (Awaiting Review & Approval)
 
-1. Optionally commit Phase 3 changes (verifying no `.env` or secrets staged)
-2. Start **Phase 4 — OpenAI GPT-4o Integration & Natural-Language Invoice Extraction** upon user approval
+1. Review Phase 4 diff & optionally create Phase 4 Git checkpoint
+2. Optionally run 1 live OpenAI extraction test if approved by user
+3. Start **Phase 5 — Human Approval Workflow & PayPal Sandbox Orders API** upon user approval
 
 ---
 
