@@ -6,10 +6,18 @@
 # ----- Environment files (NEVER commit real .env files) -----
 .env
 .env.local
+.env.*.local
 .env.production
 .env.staging
 *.env
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.credentials.json
 
 # ----- Node.js / npm / pnpm -----
 node_modules/

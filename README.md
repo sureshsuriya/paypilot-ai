@@ -14,7 +14,7 @@ PayPilot AI combines authoritative **PayPal Sandbox Orders v2** payment orchestr
 3. [Key Features](#key-features)
 4. [Prerequisites](#prerequisites)
 5. [Installation and Setup](#installation-and-setup)
-6. [Environment Variables](#environment-variables)
+6. [Environment Variables and API Key Setup](#environment-variables-and-api-key-setup)
 7. [Running the Application](#running-the-application)
 8. [Testing Instructions](#testing-instructions)
 9. [API & Schema Reference](#api--schema-reference)
@@ -109,6 +109,9 @@ PayPilot AI combines authoritative **PayPal Sandbox Orders v2** payment orchestr
 
 ### 1. Database Setup (MySQL 8)
 
+Use **either** a local MySQL 8.0+ installation or the optional Docker Compose service:
+
+**Option A — Existing Local MySQL 8**
 ```sql
 CREATE DATABASE paypilot_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'paypilot_user'@'localhost' IDENTIFIED BY 'your_password';
@@ -116,16 +119,24 @@ GRANT ALL PRIVILEGES ON paypilot_ai.* TO 'paypilot_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-Flyway (`backend/src/main/resources/db/migration/V1` through `V6`) manages schema creation and additive upgrades automatically on backend startup.
+**Option B — Optional Local Docker MySQL 8 (`docker-compose.yml`)**
+
+If you do not have MySQL installed locally (do not run if port `3306` is already used by an existing local MySQL server):
+
+```bash
+docker compose up -d mysql
+```
+
+This starts `mysql:8.0.45` with database `paypilot_ai` and user `paypilot_user` pre-created. Flyway (`backend/src/main/resources/db/migration/V1` through `V6`) manages schema creation and additive upgrades automatically on backend startup.
 
 ### 2. Configure Services
 
 1. **Backend (`backend/.env` copied from `backend/.env.example`)**:
-   Configure MySQL credentials, `JWT_SECRET`, `AI_SERVICE_SECRET`, PayPal Sandbox credentials (`PAYPAL_MODE=sandbox`), and optional SMTP credentials (`MAIL_ENABLED=true`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`).
+   Configure MySQL credentials, `JWT_SECRET`, numeric `JWT_EXPIRATION_MS` (e.g. `86400000`), `AI_SERVICE_SECRET`, PayPal Sandbox credentials (`PAYPAL_MODE=sandbox`), and optional SMTP credentials (`MAIL_ENABLED=true`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`).
 2. **AI Service (`ai-service/.env` copied from `ai-service/.env.example`)**:
    Configure `GEMINI_API_KEY` (`GEMINI_MODEL=gemini-3.5-flash-lite`), `AI_SERVICE_SECRET`, or set `DEMO_MODE=true` for offline deterministic extraction.
 3. **Frontend (`frontend/.env` copied from `frontend/.env.example`)**:
-   Verify `VITE_API_BASE_URL=http://localhost:8080/api`.
+   Verify `VITE_API_BASE_URL=http://localhost:8080/api` and `VITE_APP_ENV=development`.
 
 ```bash
 cd ai-service && npm install
@@ -136,7 +147,65 @@ cd ../frontend && npm install
 
 ---
 
-## Environment Variables
+## Environment Variables and API Key Setup
+
+PayPilot AI keeps all sensitive credentials out of source control by using three separate template files (`backend/.env.example`, `ai-service/.env.example`, and `frontend/.env.example`). Root `.gitignore` excludes all local `.env` files (`*.env`) while explicitly allowing `!.env.example` templates to be committed.
+
+### 1. Copy Each `.env.example` to `.env`
+
+Copy each template into its own service folder before starting the application:
+
+```bash
+# macOS / Linux / Git Bash
+cp backend/.env.example backend/.env
+cp ai-service/.env.example ai-service/.env
+cp frontend/.env.example frontend/.env
+```
+
+```powershell
+# Windows PowerShell
+Copy-Item backend\.env.example backend\.env
+Copy-Item ai-service\.env.example ai-service\.env
+Copy-Item frontend\.env.example frontend\.env
+```
+
+The `.env.example` files ship with safe placeholder values only — replace every placeholder with your own credentials inside your **local `.env` files only**:
+
+```env
+# Placeholder examples in .env.example (replace these only in your local git-ignored .env files)
+GEMINI_API_KEY=your_gemini_api_key
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+JWT_SECRET=your_jwt_secret
+AI_SERVICE_SECRET=your_ai_service_secret
+```
+
+> **Security rule**: Never commit actual API keys, PayPal secrets, database passwords, SMTP passwords, or JWT signing keys to GitHub. Git history and public repositories are permanently visible; `.gitignore` ignores real `.env` files so credentials stay strictly local.
+
+### 2. Step-by-Step Credential Setup
+
+1. **Google Gemini API Key (`ai-service/.env`)**:
+   - Visit [Google AI Studio](https://aistudio.google.com/apikey), sign in, and click **Create API key**.
+   - Paste it into `GEMINI_API_KEY` in `ai-service/.env` with `GEMINI_MODEL=gemini-3.5-flash-lite` and `DEMO_MODE=false` (or set `DEMO_MODE=true` for offline deterministic extraction without an API key). See [`docs/gemini-setup.md`](docs/gemini-setup.md).
+2. **PayPal Sandbox Credentials (`backend/.env`)**:
+   - Sign in at [PayPal Developer Dashboard](https://developer.paypal.com), navigate to **Apps & Credentials**, verify you are on the **Sandbox** tab, create a **Merchant** REST app, and copy its **Client ID** and **Client Secret** into `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`.
+   - Keep `PAYPAL_MODE=sandbox` and `PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com` (the backend rejects non-Sandbox configurations). See [`docs/paypal-setup.md`](docs/paypal-setup.md).
+3. **Strong `JWT_SECRET` (`backend/.env`)**:
+   - Generate a cryptographically random secret of **at least 32 characters** (`256+` bits) for HMAC-SHA256 JWT signing (`JwtUtil` rejects shorter secrets at startup):
+     ```bash
+     openssl rand -base64 32
+     ```
+     ```powershell
+     $bytes = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes); [Convert]::ToBase64String($bytes)
+     ```
+4. **Shared `AI_SERVICE_SECRET` (`backend/.env` & `ai-service/.env`)**:
+   - Set the **exact same** random secret string for `AI_SERVICE_SECRET` in both `backend/.env` and `ai-service/.env`.
+   - Spring Boot sends this value in the `X-AI-Service-Secret` header, and `ai-service` validates it using constant-time `crypto.timingSafeEqual` so unauthenticated callers cannot access the internal AI microservice.
+5. **MySQL 8 Connection (`backend/.env`)**:
+   - Configure the exact backend datasource variables:
+     - `SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/paypilot_ai?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true`
+     - `SPRING_DATASOURCE_USERNAME=paypilot_user`
+     - `SPRING_DATASOURCE_PASSWORD=<your_mysql_user_password>`
 
 ### Backend (`backend/.env`)
 
@@ -149,12 +218,18 @@ cd ../frontend && npm install
 | `PAYPAL_CLIENT_SECRET` | Required | PayPal Sandbox REST App Secret |
 | `PAYPAL_MODE` | Required | Must remain `sandbox` |
 | `PAYPAL_BASE_URL` | Optional | Defaults to `https://api-m.sandbox.paypal.com` |
+| `PAYPAL_WEBHOOK_ID` | Optional | Reserved PayPal webhook ID property (`your_paypal_webhook_id` placeholder) |
 | `JWT_SECRET` | Required | Minimum 32-character secret for HMAC-SHA256 JWTs |
+| `JWT_EXPIRATION_MS` | Optional | Token lifetime in numeric milliseconds (e.g. `86400000` for 24h; defaults to `86400000`) |
 | `AI_SERVICE_URL` | Required | Internal Node.js AI URL (`http://localhost:3001`) |
 | `AI_SERVICE_SECRET` | Required | Shared secret matching `ai-service/.env` |
-| `CORS_ALLOWED_ORIGINS` | Optional | Defaults to `http://localhost:5173` |
+| `GEMINI_MODEL` | Optional | Default model name fallback logged by backend (`gemini-3.5-flash-lite` default) |
+| `SERVER_PORT` | Optional | Backend HTTP port (defaults to `8080`) |
+| `CORS_ALLOWED_ORIGINS` | Optional | Comma-separated allowed frontend origins (defaults to `http://localhost:5173`) |
 | `MAIL_ENABLED` | Optional | Set `true` to enable real SMTP email delivery (`false` default) |
-| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Optional | Standard SMTP server credentials when `MAIL_ENABLED=true` |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Optional | Standard SMTP server settings when `MAIL_ENABLED=true` |
+| `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` | Optional | SMTP auth (`true` default) and STARTTLS (`true` default) toggles |
+| `MAIL_RESEND_COOLDOWN_SECONDS` | Optional | Duplicate-email cooldown window in seconds (defaults to `60`) |
 
 ### AI Service (`ai-service/.env`)
 
@@ -164,7 +239,15 @@ cd ../frontend && npm install
 | `GEMINI_MODEL` | Optional | Defaults to `gemini-3.5-flash-lite` |
 | `DEMO_MODE` | Optional | `true` enables deterministic local extraction without external calls |
 | `AI_SERVICE_PORT` | Optional | Defaults to `3001` |
+| `BACKEND_URL` | Optional | Spring Boot backend URL (`http://localhost:8080` default) |
 | `AI_SERVICE_SECRET` | Required | Must match backend `AI_SERVICE_SECRET` |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_BASE_URL` | Optional | Spring Boot API base URL (`http://localhost:8080/api` or `/api` via Vite dev proxy) |
+| `VITE_APP_ENV` | Optional | Frontend environment indicator (`development` default) |
 
 ---
 
