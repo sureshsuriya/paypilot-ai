@@ -89,6 +89,12 @@ coverage/
 ehthumbs.db
 Thumbs.db
 
+# ----- Local Databases & Dumps (keep Flyway migrations & schema-reference tracked) -----
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+
 # ----- Misc -----
 *.tmp
 *.temp

@@ -55,7 +55,10 @@ import java.util.List;
     indexes = {
         @Index(name = "idx_invoices_user_id", columnList = "user_id"),
         @Index(name = "idx_invoices_status", columnList = "status"),
-        @Index(name = "idx_invoices_paypal_id", columnList = "paypal_invoice_id")
+        @Index(name = "idx_invoices_paypal_id", columnList = "paypal_invoice_id"),
+        @Index(name = "idx_invoices_approved_by", columnList = "approved_by_user_id"),
+        @Index(name = "idx_invoices_payment_lock", columnList = "id, payment_lock_until"),
+        @Index(name = "idx_invoices_customer_id", columnList = "customer_id")
     }
 )
 @Getter
@@ -78,6 +81,18 @@ public class Invoice {
     )
     @ToString.Exclude
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "customer_id",
+        foreignKey = @ForeignKey(name = "fk_invoices_customer")
+    )
+    @ToString.Exclude
+    private Customer customer;
+
+    @Size(max = 32)
+    @Column(name = "client_phone", length = 32)
+    private String clientPhone;
 
     @Size(max = 255)
     @Column(name = "paypal_invoice_id", length = 255)
@@ -129,6 +144,22 @@ public class Invoice {
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    @Column(name = "approved_by_user_id")
+    private Long approvedByUserId;
+
+    @Size(max = 64)
+    @Column(name = "approved_snapshot_hash", length = 64)
+    private String approvedSnapshotHash;
+
+    @Column(name = "payment_lock_owner", length = 64, insertable = false, updatable = false)
+    private String paymentLockOwner;
+
+    @Column(name = "payment_lock_until", insertable = false, updatable = false)
+    private LocalDateTime paymentLockUntil;
 
     @NotNull
     @Builder.Default

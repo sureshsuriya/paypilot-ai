@@ -1,6 +1,6 @@
 /**
  * Natural-language invoice extraction route.
- * Accepts plain-English requests from Spring Boot, calls GPT-4o structured output,
+ * Accepts plain-English requests from Spring Boot, calls Gemini structured JSON output,
  * validates with Zod, and returns a draft preview requiring human confirmation.
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
@@ -10,6 +10,7 @@ import {
 } from '../validation/extractionSchema.js';
 import {
   AiConfigurationError,
+  AiRateLimitError,
   AiUpstreamError,
   extractInvoiceFromPrompt,
   type ExtractionDependencies,
@@ -61,10 +62,17 @@ export function createExtractionRouter(deps: ExtractionDependencies = {}): Route
         });
         return;
       }
+      if (err instanceof AiRateLimitError) {
+        res.status(429).json({
+          error: 'AI quota or rate limit exceeded',
+          message: err.message,
+        });
+        return;
+      }
       if (err instanceof AiUpstreamError) {
         res.status(502).json({
           error: 'AI extraction failed',
-          message: 'Unable to extract invoice fields from the OpenAI provider.',
+          message: 'Unable to extract invoice fields from the Gemini provider.',
         });
         return;
       }
@@ -76,4 +84,3 @@ export function createExtractionRouter(deps: ExtractionDependencies = {}): Route
 }
 
 export const extractionRouter = createExtractionRouter();
-

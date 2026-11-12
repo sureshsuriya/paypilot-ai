@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -44,10 +45,19 @@ import java.util.Map;
 @Entity
 @Table(
     name = "payments",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uq_payments_paypal_order_id", columnNames = "paypal_order_id"),
+        @UniqueConstraint(name = "uq_payments_paypal_capture_id", columnNames = "paypal_capture_id"),
+        @UniqueConstraint(name = "uq_payments_active_invoice", columnNames = "active_invoice_id"),
+        @UniqueConstraint(name = "uq_payments_idempotency_key", columnNames = "idempotency_key"),
+        @UniqueConstraint(name = "uq_payments_capture_idempotency_key", columnNames = "capture_idempotency_key")
+    },
     indexes = {
         @Index(name = "idx_payments_invoice_id", columnList = "invoice_id"),
         @Index(name = "idx_payments_order_id", columnList = "paypal_order_id"),
-        @Index(name = "idx_payments_capture_id", columnList = "paypal_capture_id")
+        @Index(name = "idx_payments_capture_id", columnList = "paypal_capture_id"),
+        @Index(name = "idx_payments_invoice_status", columnList = "invoice_id, status"),
+        @Index(name = "idx_payments_payment_link_id", columnList = "payment_link_id")
     }
 )
 @Getter
@@ -71,6 +81,14 @@ public class Payment {
     @ToString.Exclude
     private Invoice invoice;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "payment_link_id",
+        foreignKey = @ForeignKey(name = "fk_payments_payment_link")
+    )
+    @ToString.Exclude
+    private PaymentLink paymentLink;
+
     @NotBlank(message = "PayPal order ID is required")
     @Size(max = 255)
     @Column(name = "paypal_order_id", nullable = false, length = 255)
@@ -79,6 +97,28 @@ public class Payment {
     @Size(max = 255)
     @Column(name = "paypal_capture_id", length = 255)
     private String paypalCaptureId;
+
+    @Size(max = 64)
+    @Column(name = "invoice_snapshot_hash", length = 64)
+    private String invoiceSnapshotHash;
+
+    @Size(max = 100)
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
+    @Size(max = 100)
+    @Column(name = "capture_idempotency_key", length = 100)
+    private String captureIdempotencyKey;
+
+    @Column(name = "capture_requested_at")
+    private LocalDateTime captureRequestedAt;
+
+    @Column(name = "active_invoice_id")
+    private Long activeInvoiceId;
+
+    @Size(max = 1000)
+    @Column(name = "paypal_approval_url", length = 1000)
+    private String paypalApprovalUrl;
 
     @NotNull(message = "Payment amount is required")
     @DecimalMin(value = "0.01", message = "Payment amount must be greater than zero")
@@ -115,6 +155,11 @@ public class Payment {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public void setStatus(PaymentStatus status) {
+        this.status = status;
+        syncActiveInvoiceSlot();
+    }
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
@@ -124,13 +169,30 @@ public class Payment {
         if (this.status == null) {
             this.status = PaymentStatus.CREATED;
         }
+        syncActiveInvoiceSlot();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
+        syncActiveInvoiceSlot();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public boolean isActivePaymentSlotStatus() {
+        return this.status == PaymentStatus.CREATED
+            || this.status == PaymentStatus.APPROVED
+            || this.status == PaymentStatus.PENDING
+            || this.status == PaymentStatus.CAPTURED;
+    }
+
+    private void syncActiveInvoiceSlot() {
+        if (isActivePaymentSlotStatus() && this.invoice != null) {
+            this.activeInvoiceId = this.invoice.getId();
+        } else {
+            this.activeInvoiceId = null;
+        }
     }
 }
 

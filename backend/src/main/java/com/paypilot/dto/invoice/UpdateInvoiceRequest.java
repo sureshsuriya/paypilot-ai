@@ -7,13 +7,14 @@ import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * Validated request payload to update an existing DRAFT invoice.
+ * Validated request payload to update an existing DRAFT or APPROVED invoice.
  */
 public record UpdateInvoiceRequest(
     @NotBlank(message = "Client name is required")
@@ -40,7 +41,24 @@ public record UpdateInvoiceRequest(
 
     @NotNull(message = "Due date is required")
     @FutureOrPresent(message = "Due date must be today or in the future")
-    LocalDate dueDate
-) {
-}
+    LocalDate dueDate,
 
+    @Positive(message = "Customer ID must be positive")
+    Long customerId,
+
+    @Size(max = 32, message = "Client phone must not exceed 32 characters")
+    String clientPhone
+) {
+    /**
+     * Backward-compatible constructor for existing callers and integration tests.
+     */
+    public UpdateInvoiceRequest(
+            String clientName,
+            String clientEmail,
+            String description,
+            BigDecimal amount,
+            String currency,
+            LocalDate dueDate) {
+        this(clientName, clientEmail, description, amount, currency, dueDate, null, null);
+    }
+}

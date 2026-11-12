@@ -1,10 +1,20 @@
-import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
 import {
-  OpenAiInvoiceSchema,
-  type OpenAiInvoiceResult,
+  ApiError,
+  FinishReason,
+  GoogleGenAI,
+  Type,
+  type GenerateContentParameters,
+  type GenerateContentResponse,
+  type Schema,
+} from '@google/genai';
+import {
+  AiInvoiceExtractionSchema,
+  type AiInvoiceExtractionResult,
 } from '../validation/extractionSchema.js';
 import { extractInvoiceInDemoMode } from '../mock/mockExtractor.js';
+
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const GEMINI_PLACEHOLDER_KEY = 'your_gemini_api_key_here';
 
 export class AiConfigurationError extends Error {
   constructor(message: string) {
@@ -20,49 +30,114 @@ export class AiUpstreamError extends Error {
   }
 }
 
+export class AiRateLimitError extends AiUpstreamError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AiRateLimitError';
+  }
+}
+
 export interface TokenUsage {
   promptTokens: number | null;
   completionTokens: number | null;
 }
 
 export interface InvoiceExtractionOutcome {
-  parsed: OpenAiInvoiceResult;
+  parsed: AiInvoiceExtractionResult;
   sourceMode: 'live' | 'demo';
   modelUsed: string;
   tokenUsage: TokenUsage;
 }
 
+export type GeminiGenerateResponse = Pick<
+  GenerateContentResponse,
+  'text' | 'modelVersion' | 'usageMetadata' | 'candidates' | 'promptFeedback'
+>;
+
 /**
- * Minimal subset of the OpenAI client used by the extractor so tests can
- * inject a mock without making any live API requests or incurring costs.
+ * Minimal subset of @google/genai GoogleGenAI client used by the extractor so tests can
+ * inject a deterministic mock without calling Google Gemini APIs or incurring quota usage.
  */
-export interface OpenAiParseClient {
-  beta: {
-    chat: {
-      completions: {
-        parse(params: unknown): Promise<{
-          model?: string;
-          usage?: {
-            prompt_tokens?: number;
-            completion_tokens?: number;
-          } | null;
-          choices: Array<{
-            message?: {
-              parsed?: OpenAiInvoiceResult | null;
-              refusal?: string | null;
-            };
-          }>;
-        }>;
-      };
-    };
+export interface GeminiGenerateClient {
+  models: {
+    generateContent(params: GenerateContentParameters): Promise<GeminiGenerateResponse>;
   };
 }
 
 export interface ExtractionDependencies {
-  client?: OpenAiParseClient;
+  client?: GeminiGenerateClient;
   demoMode?: boolean;
   model?: string;
   apiKey?: string;
+}
+
+/**
+ * Strict Gemini structured output Schema guaranteeing JSON adherence without
+ * inventing missing client or financial fields.
+ */
+export const GEMINI_INVOICE_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    clientName: {
+      type: Type.STRING,
+      nullable: true,
+      description: 'Client person or company name stated in the prompt, or null if omitted.',
+    },
+    clientEmail: {
+      type: Type.STRING,
+      nullable: true,
+      description: 'Client email address stated in the prompt, or null if omitted.',
+    },
+    description: {
+      type: Type.STRING,
+      nullable: true,
+      description: 'Service or product description stated in the prompt, or null if omitted.',
+    },
+    amount: {
+      type: Type.NUMBER,
+      nullable: true,
+      description: 'Monetary invoice amount as a number, or null if omitted.',
+    },
+    currency: {
+      type: Type.STRING,
+      nullable: true,
+      description: '3-letter uppercase ISO currency code (e.g. USD), or null if omitted.',
+    },
+    dueDate: {
+      type: Type.STRING,
+      nullable: true,
+      description: 'Payment due date in YYYY-MM-DD format computed from referenceDate, or null if omitted.',
+    },
+    confidence: {
+      type: Type.NUMBER,
+      description: 'Extraction clarity confidence score between 0.0 and 1.0.',
+    },
+    assumptions: {
+      type: Type.STRING,
+      nullable: true,
+      description: 'Brief explanation of unambiguous interpretations (e.g. $ -> USD, relative due date), or null.',
+    },
+  },
+  required: [
+    'clientName',
+    'clientEmail',
+    'description',
+    'amount',
+    'currency',
+    'dueDate',
+    'confidence',
+    'assumptions',
+  ],
+};
+
+export function resolveConfiguredGeminiModel(overrideModel?: string): string {
+  const candidate = (overrideModel ?? process.env['GEMINI_MODEL'] ?? '').trim();
+  return candidate.length > 0 ? candidate : DEFAULT_GEMINI_MODEL;
+}
+
+export function isGeminiApiKeyConfigured(overrideApiKey?: string): boolean {
+  const apiKey = (overrideApiKey ?? process.env['GEMINI_API_KEY'] ?? '').trim();
+  return apiKey.length > 0 && apiKey !== GEMINI_PLACEHOLDER_KEY;
 }
 
 export async function extractInvoiceFromPrompt(
@@ -71,7 +146,7 @@ export async function extractInvoiceFromPrompt(
   deps: ExtractionDependencies = {}
 ): Promise<InvoiceExtractionOutcome> {
   const demoMode = deps.demoMode ?? process.env['DEMO_MODE'] === 'true';
-  const configuredModel = deps.model ?? process.env['OPENAI_MODEL'] ?? 'gpt-4o';
+  const configuredModel = resolveConfiguredGeminiModel(deps.model);
 
   if (demoMode) {
     return {
@@ -85,59 +160,115 @@ export async function extractInvoiceFromPrompt(
     };
   }
 
-  const client = deps.client ?? createOpenAiClient(deps.apiKey);
+  const client = deps.client ?? createGeminiClient(deps.apiKey);
 
   try {
-    const completion = await client.beta.chat.completions.parse({
+    const response = await client.models.generateContent({
       model: configuredModel,
-      temperature: 0,
-      messages: [
-        {
-          role: 'system',
-          content: buildSystemPrompt(referenceDate),
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      response_format: zodResponseFormat(OpenAiInvoiceSchema, 'invoice_extraction'),
+      contents: prompt,
+      config: {
+        systemInstruction: buildSystemPrompt(referenceDate),
+        responseMimeType: 'application/json',
+        responseSchema: GEMINI_INVOICE_RESPONSE_SCHEMA,
+      },
     });
 
-    const firstMessage = completion.choices[0]?.message;
-    if (firstMessage?.refusal) {
-      throw new AiUpstreamError(`Model refused extraction: ${firstMessage.refusal}`);
-    }
-    if (!firstMessage?.parsed) {
-      throw new AiUpstreamError('OpenAI returned an empty structured response.');
+    ensureResponseNotBlocked(response);
+
+    const rawText = response.text?.trim();
+    if (!rawText) {
+      throw new AiUpstreamError('Gemini returned an empty structured response.');
     }
 
-    const validated = OpenAiInvoiceSchema.parse(firstMessage.parsed);
+    let rawJson: unknown;
+    try {
+      rawJson = JSON.parse(rawText);
+    } catch {
+      throw new AiUpstreamError('Gemini returned malformed non-JSON structured output.');
+    }
+
+    const zodResult = AiInvoiceExtractionSchema.safeParse(rawJson);
+    if (!zodResult.success) {
+      throw new AiUpstreamError('Gemini structured output failed schema validation.');
+    }
 
     return {
-      parsed: validated,
+      parsed: zodResult.data,
       sourceMode: 'live',
-      modelUsed: completion.model ?? configuredModel,
+      modelUsed: response.modelVersion?.trim() || configuredModel,
       tokenUsage: {
-        promptTokens: completion.usage?.prompt_tokens ?? null,
-        completionTokens: completion.usage?.completion_tokens ?? null,
+        promptTokens: response.usageMetadata?.promptTokenCount ?? null,
+        completionTokens: response.usageMetadata?.candidatesTokenCount ?? null,
       },
     };
   } catch (err) {
-    if (err instanceof AiConfigurationError || err instanceof AiUpstreamError) {
-      throw err;
-    }
-    const safeMsg = err instanceof Error ? err.message : 'OpenAI extraction request failed';
-    throw new AiUpstreamError(safeMsg);
+    throw mapProviderError(err);
   }
 }
 
-function createOpenAiClient(overrideApiKey?: string): OpenAiParseClient {
-  const apiKey = overrideApiKey ?? process.env['OPENAI_API_KEY'];
-  if (!apiKey || apiKey === 'your_openai_api_key_here') {
-    throw new AiConfigurationError('OpenAI API key is not configured for live extraction.');
+function createGeminiClient(overrideApiKey?: string): GeminiGenerateClient {
+  if (!isGeminiApiKeyConfigured(overrideApiKey)) {
+    throw new AiConfigurationError('Gemini API key is not configured for live extraction.');
   }
-  return new OpenAI({ apiKey }) as unknown as OpenAiParseClient;
+  const apiKey = (overrideApiKey ?? process.env['GEMINI_API_KEY'] ?? '').trim();
+  return new GoogleGenAI({ apiKey });
+}
+
+function ensureResponseNotBlocked(response: GeminiGenerateResponse): void {
+  const blockReason = response.promptFeedback?.blockReason;
+  if (blockReason && blockReason !== 'BLOCKED_REASON_UNSPECIFIED') {
+    throw new AiUpstreamError(`Gemini blocked extraction prompt (${blockReason}).`);
+  }
+
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (finishReason && finishReason !== FinishReason.STOP) {
+    throw new AiUpstreamError(`Gemini extraction did not finish cleanly (${finishReason}).`);
+  }
+}
+
+function mapProviderError(err: unknown): AiConfigurationError | AiUpstreamError {
+  if (err instanceof AiConfigurationError || err instanceof AiUpstreamError) {
+    return err;
+  }
+
+  const rawStatus = extractErrorStatus(err);
+  const sanitizedMessage = sanitizeErrorMessage(err);
+
+  if (
+    rawStatus === 429 ||
+    /resource_exhausted|rate[ _-]?limit|quota/i.test(sanitizedMessage)
+  ) {
+    return new AiRateLimitError(
+      'Gemini API quota or rate limit exceeded. Please wait and retry shortly.'
+    );
+  }
+
+  if (rawStatus === 401 || rawStatus === 403 || /api[_ ]?key/i.test(sanitizedMessage)) {
+    return new AiUpstreamError('Gemini API authentication or permission failed.');
+  }
+
+  return new AiUpstreamError(sanitizedMessage || 'Gemini extraction request failed.');
+}
+
+function extractErrorStatus(err: unknown): number | undefined {
+  if (err instanceof ApiError) {
+    return err.status;
+  }
+  if (err && typeof err === 'object' && 'status' in err) {
+    const candidate = (err as { status?: unknown }).status;
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function sanitizeErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : '';
+  return message
+    .replace(/([?&]key=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}\b/g, '[REDACTED]')
+    .trim();
 }
 
 function buildSystemPrompt(referenceDate: string): string {
@@ -153,4 +284,3 @@ function buildSystemPrompt(referenceDate: string): string {
     '5. Set confidence between 0.0 and 1.0 reflecting how clear and complete the prompt was.',
   ].join('\n');
 }
-

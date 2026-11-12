@@ -1,4 +1,4 @@
-import type { OpenAiInvoiceResult } from '../validation/extractionSchema.js';
+import type { AiInvoiceExtractionResult } from '../validation/extractionSchema.js';
 
 const WORD_NUMBERS: Record<string, number> = {
   one: 1,
@@ -23,7 +23,7 @@ const WORD_NUMBERS: Record<string, number> = {
 export function extractInvoiceInDemoMode(
   prompt: string,
   referenceDate: string
-): OpenAiInvoiceResult {
+): AiInvoiceExtractionResult {
   const emailMatch = prompt.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
   const clientEmail = emailMatch ? emailMatch[1] : null;
 

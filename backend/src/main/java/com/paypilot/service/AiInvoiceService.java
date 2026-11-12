@@ -11,7 +11,8 @@ import com.paypilot.repository.AiExtractionLogRepository;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +37,11 @@ import java.util.regex.Pattern;
  *   - Persists AI transparency metadata in ai_extraction_logs and audit_logs.
  */
 @Service
-@RequiredArgsConstructor
 public class AiInvoiceService {
 
     private static final Pattern CURRENCY_PATTERN = Pattern.compile("^[A-Z]{3}$");
     private static final BigDecimal MIN_AMOUNT = new BigDecimal("0.01");
+    private static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
     private static final String AI_REVIEW_LABEL =
         "AI-extracted draft — please verify all details before saving";
 
@@ -48,6 +49,22 @@ public class AiInvoiceService {
     private final AiExtractionLogRepository extractionLogRepository;
     private final AuditLogService auditLogService;
     private final Validator validator;
+    private final String defaultModel;
+
+    @Autowired
+    public AiInvoiceService(
+            AiServiceClient aiServiceClient,
+            AiExtractionLogRepository extractionLogRepository,
+            AuditLogService auditLogService,
+            Validator validator,
+            @Value("${ai.default-model:" + DEFAULT_GEMINI_MODEL + "}") String defaultModel) {
+        this.aiServiceClient = aiServiceClient;
+        this.extractionLogRepository = extractionLogRepository;
+        this.auditLogService = auditLogService;
+        this.validator = validator;
+        String normalized = normalizeText(defaultModel);
+        this.defaultModel = normalized != null ? normalized : DEFAULT_GEMINI_MODEL;
+    }
 
     @Transactional
     public ExtractedInvoiceDraftResponse extractInvoiceDraft(
@@ -123,7 +140,7 @@ public class AiInvoiceService {
         }
 
         BigDecimal confidence = clampConfidence(raw.confidence());
-        String modelUsed = normalizeText(raw.modelUsed()) != null ? raw.modelUsed().trim() : "gpt-4o";
+        String modelUsed = normalizeText(raw.modelUsed()) != null ? raw.modelUsed().trim() : defaultModel;
         if (modelUsed.length() > 100) {
             modelUsed = modelUsed.substring(0, 100);
         }

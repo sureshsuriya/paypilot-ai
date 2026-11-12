@@ -5,137 +5,108 @@
 
 ## Overview
 
-PayPilot AI uses **PayPal Sandbox** exclusively. All transactions shown in the application are test transactions and involve no real money. This guide explains how to set up PayPal Sandbox credentials and test accounts.
+PayPilot AI uses **PayPal Developer Sandbox REST API (Orders v2)** exclusively. All transactions are test transactions with zero real money movement. The Spring Boot backend enforces `PAYPAL_MODE=sandbox` and `https://api-m.sandbox.paypal.com` fail-closed at startup and before every API request.
 
 ---
 
 ## Step 1 — Create a PayPal Developer Account
 
 1. Go to [https://developer.paypal.com](https://developer.paypal.com)
-2. Click **Log in to Dashboard** (top right)
-3. If you don't have a PayPal account, click **Sign Up** and create one (free)
-4. After logging in, you will be on the **PayPal Developer Dashboard**
+2. Click **Log in to Dashboard** (or **Sign Up** to create a free developer account).
 
 ---
 
-## Step 2 — Create a Sandbox Application
+## Step 2 — Create a Sandbox REST Application
 
-1. In the Developer Dashboard, click **Apps & Credentials** in the left sidebar
-2. Make sure you are on the **Sandbox** tab (not Live)
-3. Click **Create App**
-4. Enter an app name (e.g., `PayPilot AI`)
-5. App type: **Merchant**
-6. Click **Create App**
-
-You will now see your app's **Client ID** and **Secret**.
+1. In the PayPal Developer Dashboard, open **Apps & Credentials**.
+2. Confirm you are on the **Sandbox** tab (not Live).
+3. Click **Create App**, enter a name (e.g., `PayPilot AI`), select **Merchant**, and click **Create App**.
+4. Copy your Sandbox **Client ID** and **Client Secret**.
 
 ---
 
-## Step 3 — Copy Your Sandbox Credentials
+## Step 3 — Configure Backend Sandbox Credentials
 
-From the app page:
-- Copy the **Client ID** → paste into `backend/.env` as `PAYPAL_CLIENT_ID`
-- Click **Show** next to Secret → copy → paste into `backend/.env` as `PAYPAL_CLIENT_SECRET`
+Copy `backend/.env.example` to `backend/.env` and set:
 
-Ensure these lines in `backend/.env`:
-```
-PAYPAL_CLIENT_ID=AaBbCcDd...your_actual_sandbox_client_id
-PAYPAL_CLIENT_SECRET=your_actual_sandbox_secret
+```env
+PAYPAL_CLIENT_ID=your_sandbox_client_id_here
+PAYPAL_CLIENT_SECRET=your_sandbox_client_secret_here
 PAYPAL_MODE=sandbox
 PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
 ```
 
-> ⚠️ **Never use Live credentials in this application.** The sandbox URL is different from live. `PAYPAL_MODE=sandbox` is enforced by the backend.
+> **Security guarantees**:
+> - Credentials exist **only** in `backend/.env` (excluded by `.gitignore`) and are never exposed to React, `ai-service`, API responses, or audit logs.
+> - Changing `PAYPAL_MODE` or `PAYPAL_BASE_URL` away from PayPal Sandbox triggers `PayPalConfigurationException`.
 
 ---
 
 ## Step 4 — Locate Your Sandbox Test Accounts
 
-PayPal automatically creates sandbox test accounts for you.
-
-1. In the Developer Dashboard, click **Sandbox** → **Accounts**
-2. You will see two default accounts:
-   - **Business account** (your merchant — receives payments)
-   - **Personal account** (your buyer — makes payments)
-
-Note these emails and passwords. You will use the **Personal account** to simulate a buyer completing payment in the checkout flow.
+In the PayPal Developer Dashboard, go to **Sandbox** → **Accounts**:
+- **Business account**: Merchant account associated with your Sandbox REST app (receives sandbox test payments).
+- **Personal account**: Buyer test account used to sign in on PayPal Sandbox Checkout and approve a test payment.
 
 ---
 
-## Step 5 — Configure a Webhook (Optional for Judge Testing)
+## Step 5 — Verify Backend Readiness
 
-Webhooks allow PayPal to notify your app when a payment is captured. For local testing, you can use a tool like [ngrok](https://ngrok.com) to expose localhost.
+Start MySQL (`paypilot_ai`) and the Spring Boot backend (`cd backend && mvn spring-boot:run`), then check:
 
-1. In your app settings, click **Webhooks** → **Add Webhook**
-2. Set the URL to your backend webhook endpoint: `https://your-ngrok-url/api/webhooks/paypal`
-3. Subscribe to event: `PAYMENT.CAPTURE.COMPLETED`
-4. Copy the **Webhook ID** → paste into `backend/.env` as `PAYPAL_WEBHOOK_ID`
-
-**Note**: Webhook setup is optional for the basic demo. The application polls PayPal order status as a fallback.
-
----
-
-## Step 6 — Verify the Configuration
-
-After setting environment variables and starting the backend:
-
-```bash
-cd backend
-mvn spring-boot:run
+```http
+GET http://localhost:8080/api/health
 ```
 
-You should see startup logs without PayPal credential errors.
+Expected response (`200 OK`):
 
-Test PayPal connectivity:
-```
-GET http://localhost:8080/api/paypal/status
-```
-
-Expected response:
 ```json
 {
-  "connected": true,
-  "mode": "sandbox",
-  "timestamp": "2026-11-10T..."
+  "status": "ok",
+  "timestamp": "...",
+  "service": "paypilot-backend"
 }
 ```
 
 ---
 
-## Sandbox Testing Flow
+## Step 6 — End-to-End Sandbox Payment Flow (Orders v2)
 
-### Full Payment Test:
-
-1. Create an invoice in PayPilot AI
-2. Click **Send via PayPal** — this creates a PayPal Sandbox invoice
-3. Open the payment link that PayPal returns
-4. Log in as your **Sandbox Personal (buyer) account**
-5. Complete the payment
-6. Return to PayPilot AI — the invoice should show status **PAID [SANDBOX]**
-
-### Common Sandbox Issues:
-
-| Issue | Solution |
-|-------|---------|
-| "Invalid credentials" error | Double-check Client ID and Secret are from Sandbox tab, not Live |
-| Payment link not working | Ensure the sandbox buyer account is logged in |
-| Status not updating | Webhook not configured; app will poll and update on next refresh |
-| "Duplicate order" error | Use a unique invoice number for each test |
+1. **Draft & Approve (Seller Portal)**:
+   - Create an invoice manually or via Gemini AI at `/invoices/create`.
+   - Open the invoice at `/invoices/:id`, inspect the SHA-256 snapshot hash, and click **Approve Invoice**.
+2. **Generate Customer Payment Link**:
+   - In **Customer Payment Link & Delivery**, select an expiration window and click **Generate Payment Link** (`/pay/:token`).
+3. **Customer Checkout (`/pay/:token`)**:
+   - Open the link in a clean/incognito browser window and click **Pay with PayPal (Sandbox)**.
+   - Spring Boot (`POST /api/public/pay/{token}/orders`) acquires an atomic invoice lease, verifies the approved snapshot, creates a PayPal Orders v2 order (`intent=CAPTURE`), and returns a validated `sandbox.paypal.com` approval URL.
+4. **Buyer Approval & Return Capture**:
+   - Sign in with your **Sandbox Personal (Buyer)** account and complete checkout.
+   - Upon redirect back to `/pay/:token?paypal=return&token=...`, the frontend calls `POST /api/public/pay/{token}/capture`.
+   - Spring Boot captures the PayPal order, verifies `status = COMPLETED`, `captureId`, `amount`, and `currency`, saves `PaymentStatus.CAPTURED`, and transitions the invoice to `PAID`.
+5. **Interrupted or Pending Payments**:
+   - If capture returns `PENDING` or a network timeout occurs, PayPilot preserves the order idempotently and lets the seller or customer click **Check Payment Status** (querying PayPal `GET /v2/checkout/orders/{id}` safely without creating duplicate charges).
 
 ---
 
-## Sandbox vs. Live Reminder
+## Troubleshooting
+
+| Issue | Resolution |
+| --- | --- |
+| `401 Unauthorized` / auth error from PayPal | Verify `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` are copied from the **Sandbox** app tab (not Live). |
+| Checkout redirect rejected | PayPilot blocks non-Sandbox or non-HTTPS approval URLs; verify `PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com`. |
+| Link shows `REVOKED` or `EXPIRED` | Generate a fresh link from `/invoices/:id` (single-active link design revokes prior tokens). |
+| Payment remains `APPROVED` / `PENDING` | Click **Check Payment Status** in Seller **Payments** (`/payments`) or Customer Portal to query PayPal capture status. |
+
+---
+
+## Sandbox vs. Live Reference
 
 | Feature | Sandbox (This App) | Live |
-|---------|--------------------|------|
-| Money moves | ❌ No real money | ✅ Real money |
-| Credentials | Sandbox Client ID/Secret | Live Client ID/Secret |
-| Base URL | `api-m.sandbox.paypal.com` | `api-m.paypal.com` |
-| Transactions labeled | ✅ [SANDBOX] badge | — |
+| --- | --- | --- |
+| Real money | No (test only) | Yes |
+| Credentials | Sandbox Client ID & Secret | Live Client ID & Secret |
+| API Base URL | `https://api-m.sandbox.paypal.com` | `https://api-m.paypal.com` |
+| UI Indicator | `[SANDBOX]` badge shown across both portals | — |
 
-**This application will never be configured for live payments without explicit code changes and live credential setup.**
-
----
-
-*For questions about PayPal Sandbox, see: https://developer.paypal.com/tools/sandbox/*
-
+See the official [PayPal Sandbox documentation](https://developer.paypal.com/tools/sandbox/) for managing test accounts.

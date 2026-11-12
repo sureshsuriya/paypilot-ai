@@ -45,7 +45,13 @@ public record CreateInvoiceRequest(
     LocalDate dueDate,
 
     @Positive(message = "Extraction log ID must be positive")
-    Long extractionLogId
+    Long extractionLogId,
+
+    @Positive(message = "Customer ID must be positive")
+    Long customerId,
+
+    @Size(max = 32, message = "Client phone must not exceed 32 characters")
+    String clientPhone
 ) {
     /**
      * Backward-compatible constructor for callers creating manual invoices without AI extraction.
@@ -57,7 +63,20 @@ public record CreateInvoiceRequest(
             BigDecimal amount,
             String currency,
             LocalDate dueDate) {
-        this(clientName, clientEmail, description, amount, currency, dueDate, null);
+        this(clientName, clientEmail, description, amount, currency, dueDate, null, null, null);
+    }
+
+    /**
+     * Backward-compatible constructor for AI-assisted invoices without explicit customer phone/link.
+     */
+    public CreateInvoiceRequest(
+            String clientName,
+            String clientEmail,
+            String description,
+            BigDecimal amount,
+            String currency,
+            LocalDate dueDate,
+            Long extractionLogId) {
+        this(clientName, clientEmail, description, amount, currency, dueDate, extractionLogId, null, null);
     }
 }
-

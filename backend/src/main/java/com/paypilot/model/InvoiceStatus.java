@@ -9,6 +9,7 @@ package com.paypilot.model;
  */
 public enum InvoiceStatus {
     DRAFT,
+    APPROVED,
     SENT,
     PAID,
     OVERDUE,

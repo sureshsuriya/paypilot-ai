@@ -18,11 +18,11 @@ export const ExtractInvoiceInputSchema = z.object({
 export type ExtractInvoiceInput = z.infer<typeof ExtractInvoiceInputSchema>;
 
 /**
- * Strict structured output schema passed to OpenAI GPT-4o via zodResponseFormat.
- * All fields are required and nullable so GPT-4o explicitly returns null for
+ * Strict structured output schema enforced via Gemini responseSchema and validated
+ * with Zod. All draft fields are nullable so the model explicitly returns null for
  * missing information instead of guessing or fabricating values.
  */
-export const OpenAiInvoiceSchema = z.object({
+export const AiInvoiceExtractionSchema = z.object({
   clientName: z.string().nullable(),
   clientEmail: z.string().nullable(),
   description: z.string().nullable(),
@@ -33,7 +33,7 @@ export const OpenAiInvoiceSchema = z.object({
   assumptions: z.string().nullable(),
 });
 
-export type OpenAiInvoiceResult = z.infer<typeof OpenAiInvoiceSchema>;
+export type AiInvoiceExtractionResult = z.infer<typeof AiInvoiceExtractionSchema>;
 
 export interface NormalizedDraftFields {
   clientName: string | null;
@@ -79,7 +79,7 @@ export function isValidIsoDate(dateStr: string): boolean {
  * identifying missing details vs invalid values without inventing data.
  */
 export function validateAndEvaluateDraft(
-  raw: OpenAiInvoiceResult,
+  raw: AiInvoiceExtractionResult,
   referenceDate: string
 ): EvaluatedExtractionDraft {
   const missingFields: string[] = [];

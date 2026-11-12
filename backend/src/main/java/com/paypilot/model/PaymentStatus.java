@@ -9,6 +9,7 @@ package com.paypilot.model;
 public enum PaymentStatus {
     CREATED,
     APPROVED,
+    PENDING,
     CAPTURED,
     FAILED,
     CANCELLED

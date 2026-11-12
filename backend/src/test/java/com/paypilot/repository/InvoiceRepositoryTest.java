@@ -13,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -158,6 +159,35 @@ class InvoiceRepositoryTest {
 
         assertThatThrownBy(() -> entityManager.persistAndFlush(zeroAmount))
             .isInstanceOf(ConstraintViolationException.class);
+    }
+
+    @Test
+    void persistsApprovalMetadataAndSnapshotHash() {
+        LocalDateTime approvedTime = LocalDateTime.of(2026, 11, 11, 12, 30, 0);
+        String snapshotHash = "a".repeat(64);
+
+        Invoice approved = Invoice.builder()
+            .user(owner)
+            .invoiceNumber("INV-APP-001")
+            .clientName("Approved Co")
+            .clientEmail("approved@co.test")
+            .description("Milestone 1")
+            .amount(new BigDecimal("750.00"))
+            .currency("USD")
+            .status(InvoiceStatus.APPROVED)
+            .approvedAt(approvedTime)
+            .approvedByUserId(owner.getId())
+            .approvedSnapshotHash(snapshotHash)
+            .build();
+
+        Invoice saved = invoiceRepository.saveAndFlush(approved);
+        entityManager.clear();
+
+        Invoice reloaded = invoiceRepository.findByIdAndUserId(saved.getId(), owner.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(InvoiceStatus.APPROVED);
+        assertThat(reloaded.getApprovedAt()).isEqualTo(approvedTime);
+        assertThat(reloaded.getApprovedByUserId()).isEqualTo(owner.getId());
+        assertThat(reloaded.getApprovedSnapshotHash()).isEqualTo(snapshotHash);
     }
 }
 

@@ -9,15 +9,20 @@ import com.paypilot.model.User;
 import com.paypilot.model.UserRole;
 import com.paypilot.repository.AiExtractionLogRepository;
 import com.paypilot.repository.InvoiceRepository;
+import com.paypilot.repository.PaymentLinkRepository;
+import com.paypilot.repository.PaymentOrderIntentRepository;
 import com.paypilot.repository.PaymentRepository;
 import com.paypilot.repository.UserRepository;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -39,9 +44,21 @@ class InvoiceServiceTest {
     @Mock
     private PaymentRepository paymentRepository;
     @Mock
+    private PaymentOrderIntentRepository paymentOrderIntentRepository;
+    @Mock
+    private PaymentLinkRepository paymentLinkRepository;
+    @Mock
     private AiExtractionLogRepository extractionLogRepository;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private CustomerService customerService;
+    @Spy
+    private InvoiceSnapshotService invoiceSnapshotService = new InvoiceSnapshotService();
+    @Mock
+    private Validator validator;
+    @Spy
+    private Clock paymentClock = Clock.systemDefaultZone();
 
     @InjectMocks
     private InvoiceService invoiceService;

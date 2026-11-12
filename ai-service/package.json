@@ -1,7 +1,7 @@
 {
   "name": "paypilot-ai-service",
   "version": "1.0.0",
-  "description": "PayPilot AI — Node.js AI orchestration service (OpenAI GPT-4o agents). Internal only — not exposed to browser.",
+  "description": "PayPilot AI — Node.js AI orchestration service (Google Gemini). Internal only — not exposed to browser.",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,26 +9,20 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/__tests__/*.test.ts",
-    "lint": "eslint src --ext .ts"
+    "test": "tsx --test src/__tests__/*.test.ts"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "axios": "^1.7.7",
+    "@google/genai": "^3.1.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "multer": "^2.0.0",
-    "openai": "^4.67.3",
-    "pdf-parse": "^1.1.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
-    "@types/multer": "^1.4.12",
     "@types/node": "^22.9.0",
-    "@types/pdf-parse": "^1.1.4",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }

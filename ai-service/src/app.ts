@@ -8,9 +8,6 @@ import { validateServiceSecret } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { healthRouter } from './routes/health.js';
 import { createExtractionRouter } from './routes/extraction.js';
-import { reconciliationRouter } from './routes/reconciliation.js';
-import { paymentOpsRouter } from './routes/paymentOps.js';
-import { explainerRouter } from './routes/explainer.js';
 import type { ExtractionDependencies } from './agents/invoiceExtractor.js';
 
 export interface AppOptions {
@@ -30,9 +27,6 @@ export function createApp(options: AppOptions = {}) {
   app.use(validateServiceSecret);
 
   app.use('/api/ai/extract', createExtractionRouter(options.extractionDeps));
-  app.use('/api/ai/reconcile', reconciliationRouter);
-  app.use('/api/ai/payment-ops', paymentOpsRouter);
-  app.use('/api/ai/explain', explainerRouter);
 
   app.use(errorHandler);
 

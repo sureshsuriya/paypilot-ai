@@ -1,5 +1,6 @@
 package com.paypilot.controller;
 
+import com.paypilot.dto.invoice.ApproveInvoiceRequest;
 import com.paypilot.dto.invoice.CreateInvoiceRequest;
 import com.paypilot.dto.invoice.InvoiceResponse;
 import com.paypilot.dto.invoice.UpdateInvoiceRequest;
@@ -67,14 +68,35 @@ public class InvoiceController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<InvoiceResponse> updateDraftInvoice(
+    public ResponseEntity<InvoiceResponse> updateInvoice(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable("id") Long id,
             @Valid @RequestBody UpdateInvoiceRequest request,
             HttpServletRequest httpRequest) {
-        InvoiceResponse updated = invoiceService.updateDraftInvoice(
+        InvoiceResponse updated = invoiceService.updateInvoice(
             currentUser.getId(), id, request, httpRequest.getRemoteAddr());
         return ResponseEntity.ok(updated);
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<InvoiceResponse> approveInvoice(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable("id") Long id,
+            @Valid @RequestBody ApproveInvoiceRequest request,
+            HttpServletRequest httpRequest) {
+        InvoiceResponse approved = invoiceService.approveInvoice(
+            currentUser.getId(), id, request, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(approved);
+    }
+
+    @PostMapping("/{id}/revoke-approval")
+    public ResponseEntity<InvoiceResponse> revokeApproval(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable("id") Long id,
+            HttpServletRequest httpRequest) {
+        InvoiceResponse revoked = invoiceService.revokeApproval(
+            currentUser.getId(), id, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(revoked);
     }
 
     @DeleteMapping("/{id}")
